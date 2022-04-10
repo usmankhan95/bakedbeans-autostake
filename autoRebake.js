@@ -11,9 +11,11 @@ if (args.count === 0 || isNaN(args[0])) {
     }
 }
 
+const bbContractAddress = '0xe2d26507981a4daaaa8040bae1846c14e0fb56bf';
 const provider = new ethers.providers.JsonRpcProvider(`https://bsc-dataseed.binance.org/`);
 const wallet = new ethers.Wallet(process.env.bscPrivateKey, provider);
-console.log('Added wallet:', process.env.bscAddress)
+
+console.log('\nAdded wallet:', process.env.bscAddress)
 
 // Define ABI's
 const getContractBalAbi = ["function getBalance() public view returns(uint256)"];
@@ -22,20 +24,18 @@ const getBeanRewardsAbi = ["function beanRewards(address adr) public view return
 const hatchEggsAbi = ["function hatchEggs(address ref) public"]
 
 // smart contract objects
-const fetchBalanceContract = new ethers.Contract(process.env.bakedBeansContractAddress, getContractBalAbi, provider);
-const fetchBeansContract = new ethers.Contract(process.env.bakedBeansContractAddress, getMyMinersAbi, provider);
-const fetchRewardsContract = new ethers.Contract(process.env.bakedBeansContractAddress, getBeanRewardsAbi, provider);
-const hatchEggsContract = new ethers.Contract(process.env.bakedBeansContractAddress, hatchEggsAbi, provider);
+const fetchBalanceContract = new ethers.Contract(bbContractAddress, getContractBalAbi, provider);
+const fetchBeansContract = new ethers.Contract(bbContractAddress, getMyMinersAbi, provider);
+const fetchRewardsContract = new ethers.Contract(bbContractAddress, getBeanRewardsAbi, provider);
+const hatchEggsContract = new ethers.Contract(bbContractAddress, hatchEggsAbi, provider);
 
-const rebakesRequestedPerDay = 24 / args[0];
-
-console.log('Set to rebake every', rebakesRequestedPerDay, 'hour(s)')
-
-const POLLING_INTERVAL = hoursToMiliseconds(rebakesRequestedPerDay)
-setIntervalAsync(async () => { await rebake() }, POLLING_INTERVAL)
+const rebakeInterval = 24 / args[0];
+console.log('Set to rebake every', rebakeInterval, 'hour(s)\n')
 
 async function rebake() {
     try {
+        console.log('--REBAKING--')
+
         let balance = await fetchBalanceContract.getBalance();
         console.log('BB Contract Balance:', parseFloat(ethers.utils.formatEther(balance)).toFixed(3), 'BNB');
 
@@ -46,7 +46,6 @@ async function rebake() {
         console.log('Your Beans:', beans.toString(), 'BEANS');
 
         // fetch running rewards
-
         const fetchRewardsSigned = fetchRewardsContract.connect(wallet);
 
         let rewards = await fetchRewardsSigned.beanRewards(process.env.bscAddress);
@@ -57,7 +56,9 @@ async function rebake() {
         const hatchEggsSigned = hatchEggsContract.connect(wallet);
 
         await hatchEggsSigned.hatchEggs(process.env.bscAddress);
-        console.log('Successfully rebaked:', formattedRewards, 'BNB');
+        console.log('Successfully rebaked:', formattedRewards, 'BNB\n');
+
+        console.log('Waiting till next rebake in:', rebakeInterval, 'hour(s)')
     }
     catch (err) {
         console.error('Unable to rebake. Error:', err);
@@ -73,4 +74,7 @@ const setIntervalAsync = (fn, ms) => {
         setTimeout(() => setIntervalAsync(fn, ms), ms);
     });
 };
+
+const POLLING_INTERVAL = hoursToMiliseconds(rebakeInterval)
+setIntervalAsync(async () => { await rebake() }, POLLING_INTERVAL)
 
