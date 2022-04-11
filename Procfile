@@ -1,0 +1,1 @@
+worker: node autoRebake.js 4
