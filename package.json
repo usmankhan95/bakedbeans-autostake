@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node autoRebake.js 4"
+    "start": "node autoRebake.js"
   },
   "keywords": [],
   "author": "Usman Khan",
