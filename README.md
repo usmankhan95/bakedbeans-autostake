@@ -14,6 +14,8 @@ You can also skip all of that and run it manually via
 
 `node autoRebake.js 4`
 
+This script will continue to rebake and doesn't have any eat functionality. So if you want to follow the proven 6:1 method, you'll need to pause the script on day 6. I will look to add some functionality to automate eating at some point.
+
 I've also included heroku Procfile if you want the deploy it there (using a free dyno). This means you don't need to have the script running on your machine 24/7
 
 Note if you do use heroku, if you'd like to change the default number of rebakes (4) you'll need to update the Procfile
