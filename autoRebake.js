@@ -6,6 +6,12 @@ import { promisify } from 'util';
 
 dotenv.config();
 
+if ((process.env.BSC_ADDRESS === 'YOUR_ADDRESS' || process.env.BSC_PRIVATE_KEY === 'YOUR_PRIVATE_KEY') ||
+    (!process.env.BSC_ADDRESS || !process.env.BSC_PRIVATE_KEY)) {
+
+    throw 'Missing config. Add wallet values into env file!';
+}
+
 const bbContractAddress = '0xe2d26507981a4daaaa8040bae1846c14e0fb56bf';
 const provider = new ethers.providers.JsonRpcProvider(`https://bsc-dataseed.binance.org/`);
 const wallet = new ethers.Wallet(process.env.BSC_PRIVATE_KEY, provider);
@@ -28,6 +34,7 @@ const sellEggsContract = new ethers.Contract(bbContractAddress, sellEggsAbi, pro
 
 // Init undefined redis objects
 // We do this because we need these as global variables
+// If the script is run in non redis mode, these are left undefined
 let client = undefined;
 let getAsync = undefined;
 let setAsync = undefined;
@@ -47,8 +54,7 @@ if (useRedis) {
 
     client.auth(rtg.password);
 
-    client.on('error', (err) => console.error('Redis Client Error', err))
-        .on('connect', () => console.log('Redis Client Connected!'));
+    client.on('error', (err) => console.error('Redis Client Error', err));
 
     getAsync = promisify(client.get).bind(client);
     setAsync = promisify(client.set).bind(client);
@@ -240,7 +246,7 @@ async function rebake() {
 
         // waits here to allow the smart contract to update the miners value
         console.log('Waiting for beans to update...\n')
-        await new Promise(r => setTimeout(r, 8000));
+        await new Promise(r => setTimeout(r, 10000));
 
         const postBakeBeanAmount = await fetchBeansSigned.getMyMiners(process.env.BSC_ADDRESS);
         console.log('Your Beans (Post bake):', postBakeBeanAmount.toString(), 'BEANS');
