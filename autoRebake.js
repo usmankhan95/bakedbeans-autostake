@@ -3,8 +3,10 @@ import dotenv from 'dotenv';
 import { URL } from 'url';
 import { createClient } from 'redis';
 import { promisify } from 'util';
+import Conf from 'conf';
 
 dotenv.config();
+const localStore = new Conf();
 
 if (process.env.BSC_PRIVATE_KEY === 'YOUR_PRIVATE_KEY' || !process.env.BSC_PRIVATE_KEY) {
 
@@ -24,39 +26,45 @@ const getBeanRewardsAbi = ["function beanRewards(address adr) public view return
 const hatchEggsAbi = ["function hatchEggs(address ref) public"]
 const sellEggsAbi = ["function sellEggs() public"]
 
-// smart contract objects
+// Smart contract objects
 const fetchBalanceContract = new ethers.Contract(bbContractAddress, getContractBalAbi, provider);
 const fetchBeansContract = new ethers.Contract(bbContractAddress, getMyMinersAbi, provider);
 const fetchRewardsContract = new ethers.Contract(bbContractAddress, getBeanRewardsAbi, provider);
 const hatchEggsContract = new ethers.Contract(bbContractAddress, hatchEggsAbi, provider);
 const sellEggsContract = new ethers.Contract(bbContractAddress, sellEggsAbi, provider);
 
-// Init undefined redis objects
-// We do this because we need these as global variables
-// If the script is run in non redis mode, these are left undefined
-let client = undefined;
+// Declare undefined objects
+// We do this to mitigate block scoping as the values aren't hoisted in the if block below
+let redisStore = undefined;
 let getAsync = undefined;
 let setAsync = undefined;
+let delAsync = undefined;
 const useRedis = process.env.REDISTOGO_URL ? true : false;
 
-// running counts and metadata
+// Running counts and metadata
 let rebakeCount = 0;
-let eatDayIntervalCount = 0;
+let eatDayStartTime = null;
 let lastBakeTime = null;
+let currentTime = null;
 
-// Initialise redis client
+const REBAKE_COUNT = "REBAKE_COUNT";
+const EAT_DAY_START_TIME = "EAT_DAY_START_TIME";
+const LAST_BAKE_TIME = "LAST_BAKE_TIME";
+
+// Initialises redis
 if (useRedis) {
     const rtg = new URL(process.env.REDISTOGO_URL);
-    client = createClient(rtg.port, rtg.hostname, {
+    redisStore = createClient(rtg.port, rtg.hostname, {
         no_ready_check: true
     });
 
-    client.auth(rtg.password);
+    redisStore.auth(rtg.password);
 
-    client.on('error', (err) => console.error('Redis Client Error', err));
+    redisStore.on('error', (err) => console.error('Redis Client Error', err));
 
-    getAsync = promisify(client.get).bind(client);
-    setAsync = promisify(client.set).bind(client);
+    getAsync = promisify(redisStore.get).bind(redisStore);
+    setAsync = promisify(redisStore.set).bind(redisStore);
+    delAsync = promisify(redisStore.del).bind(redisStore);
 }
 
 // Minimum reward amount to rebake
@@ -89,65 +97,115 @@ console.log('Set to rebake every', rebakeInterval, 'hour(s)\n')
 
 async function getRebakeCount() {
     if (useRedis) {
-        await getAsync("REBAKE_COUNT").then((reply) => {
+        let foundReply = false;
+        await getAsync(REBAKE_COUNT).then((reply) => {
+            // check if value exists in redis first, return here if value found
             if (reply) {
                 rebakeCount = reply;
+                foundReply = true;
             }
         });
+
+        if (foundReply) {
+            return rebakeCount;
+        }
+    }
+    // Checks local store on disk for value 
+    const val = localStore.get(REBAKE_COUNT);
+    if (val) {
+        rebakeCount = val;
     }
 
     return rebakeCount;
 }
 
-async function setRebakeCount(count) {
+async function getEatDayStartTime() {
     if (useRedis) {
-        await setAsync("REBAKE_COUNT", count);
-    }
-
-    rebakeCount = count;
-}
-
-async function getEatDayIntervalCount() {
-    if (useRedis) {
-        await getAsync("EAT_DAY_INTERVAL_COUNT").then((reply) => {
+        let foundReply = false;
+        await getAsync(EAT_DAY_START_TIME).then((reply) => {
             if (reply) {
-                eatDayIntervalCount = reply;
+                eatDayStartTime = reply;
+                foundReply = true;
             }
         });
+
+        if (foundReply) {
+            return new Date(eatDayStartTime);
+        }
     }
 
-    return eatDayIntervalCount;
-}
-
-async function setEatDayIntervalCount(count) {
-    if (useRedis) {
-        await setAsync("EAT_DAY_INTERVAL_COUNT", count);
+    const val = localStore.get(EAT_DAY_START_TIME);
+    if (val) {
+        eatDayStartTime = new Date(val);
     }
 
-    eatDayIntervalCount = count;
+    return eatDayStartTime;
 }
 
 async function getLastBakeTime() {
     if (useRedis) {
-        await getAsync("LAST_BAKE_TIME").then((reply) => {
+        let foundReply = false;
+        await getAsync(LAST_BAKE_TIME).then((reply) => {
             if (reply) {
-                lastBakeTime = reply;
+                lastBakeTime = new Date(reply);
+                foundReply = true;
             }
         });
+
+        if (foundReply) {
+            return lastBakeTime;
+        }
+    }
+
+    const val = localStore.get(LAST_BAKE_TIME);
+    if (val) {
+        lastBakeTime = new Date(val);
     }
 
     return lastBakeTime;
 }
 
-async function setLastBakeTime(datetime) {
+async function setRebakeCount(count) {
     if (useRedis) {
-        await setAsync("LAST_BAKE_TIME", datetime);
+        await setAsync(REBAKE_COUNT, count);
     }
 
+    localStore.set(REBAKE_COUNT, count);
+    rebakeCount = count;
+}
+
+async function setEatDayStartTime(datetime) {
+
+    var storedVal = await getEatDayStartTime();
+
+    if (storedVal) {
+        if (datetime) {
+            return;
+        }
+    }
+
+    if (useRedis) {
+        if (datetime) {
+            await setAsync(EAT_DAY_START_TIME, datetime);
+        } else {
+            await delAsync(EAT_DAY_START_TIME);
+        }
+    }
+
+    localStore.set(EAT_DAY_START_TIME, datetime);
+    eatDayStartTime = datetime;
+}
+
+async function setLastBakeTime(datetime) {
+    if (useRedis) {
+        await setAsync(LAST_BAKE_TIME, datetime);
+    }
+
+    localStore.set(LAST_BAKE_TIME, datetime);
     lastBakeTime = datetime;
 }
 
-async function eatRewards() {
+async function eat() {
     try {
         console.log('\n--EATING BEANS--')
 
@@ -163,6 +221,42 @@ async function eatRewards() {
     }
 }
 
+async function rebake(rewards) {
+
+    if (lastBakeTime) {
+        const timeDelta = (Math.abs(lastBakeTime - currentTime) / 36e5);
+        // Allows (0.1) of cushion
+        if ((rebakeInterval - timeDelta) >= 0.1) {
+            console.log('\nRebake interval of', rebakeInterval, 'hour(s) not reached');
+            return false;
+        }
+    }
+
+    // Rebake beans (compound rewards)
+    console.log('\n--REBAKING--')
+    const hatchEggsSigned = hatchEggsContract.connect(wallet);
+
+    const tx = await hatchEggsSigned.hatchEggs(wallet.address);
+    await setLastBakeTime(currentTime);
+
+    console.log('Successfully rebaked:', rewards, 'BNB');
+    console.log('TX Hash:', tx.hash);
+    console.log('TX Fee (Gas):', ethers.utils.formatEther(tx.gasLimit * tx.gasPrice), 'BNB\n')
+
+    await setRebakeCount(Number(await getRebakeCount()) + 1);
+
+    // Waits here to allow the smart contract to update the miners value
+    console.log('Waiting for beans to update...\n')
+    await new Promise(r => setTimeout(r, 10000));
+
+    const fetchBeansSigned = fetchBeansContract.connect(wallet);
+    const postBakeBeanAmount = await fetchBeansSigned.getMyMiners(wallet.address);
+
+    console.log('Your Beans (Post bake):', postBakeBeanAmount.toString(), 'BEANS');
+
+    return true;
+}
+
 async function run() {
     try {
         const currentRebakeCount = await getRebakeCount();
@@ -172,7 +266,7 @@ async function run() {
             console.log('Last bake time:', currentLastBakeTime)
         }
 
-        const currentTime = new Date().toLocaleString()
+        currentTime = new Date();
 
         console.log('Current time:', currentTime, '\n')
 
@@ -185,13 +279,13 @@ async function run() {
         const balance = await fetchBalanceContract.getBalance();
         console.log('BB Contract Balance:', parseFloat(ethers.utils.formatEther(balance)).toFixed(3), 'BNB');
 
-        // fetch beans count
+        // Fetch beans count
         const fetchBeansSigned = fetchBeansContract.connect(wallet);
 
         const preBakeBeanAmount = await fetchBeansSigned.getMyMiners(wallet.address);
         console.log('Your Beans (Pre bake):', preBakeBeanAmount.toString(), 'BEANS');
 
-        // fetch running rewards
+        // Fetch running rewards
         const fetchRewardsSigned = fetchRewardsContract.connect(wallet);
 
         const rewards = await fetchRewardsSigned.beanRewards(wallet.address);
@@ -205,52 +299,46 @@ async function run() {
         }
 
         if (bakeDays) {
-            // checks if we've reached required number of rebakes before eat
+            // Checks if we've reached required number of rebakes before eat
             if (currentRebakeCount == rebakesTillEat) {
                 console.log('\n--EAT DAY--')
+                // Sets initial eat day start time
+                // Wont set start time again until next EAT DAY
+                await setEatDayStartTime(currentTime);
+
                 console.log('Checking if full day has passed..')
-                const currentEatDayIntervalCount = getEatDayIntervalCount();
-                // makes sure we get a full day of rewards before we eat
-                if (rebakesPerDay == currentEatDayIntervalCount) {
-                    await eatRewards();
+                const eatDayStartTime = await getEatDayStartTime();
 
-                    // reset counts to 0 
+                // 36e5 is scientific notation for 60 * 60 * 1000 (36*10^5)
+                const timeDelta = (Math.abs(eatDayStartTime - currentTime) / 36e5);
+
+                // Makes sure we get a full day of rewards before we eat
+                // Allows 30 mins (0.5) of cushion
+                if (timeDelta >= 23.5) {
+                    await eat();
+
+                    // Reset metadata
                     await setRebakeCount(0);
-                    await setEatDayIntervalCount(0);
+                    await setEatDayStartTime(null);
 
-                    console.log('Waiting till next rebake in:', rebakeInterval, 'hour(s)')
+                    console.log('Waiting till next rebake in:', rebakeInterval, 'hour(s)');
                     return;
                 }
 
-                console.log('Waiting to eat full day rewards..')
-                console.log('Waiting till next interval in:', rebakeInterval, 'hour(s)')
+                console.log('Full day not reached..');
+                console.log('Will check again in:', rebakeInterval, 'hour(s)');
 
-                await setEatDayIntervalCount(Number(currentEatDayIntervalCount) + 1);
                 return;
             }
         }
 
-        // rebake beans (compound rewards)
-        console.log('\n--REBAKING--')
-        const hatchEggsSigned = hatchEggsContract.connect(wallet);
+        const result = await rebake(formattedRewards, fetchBeansSigned);
 
-        const tx = await hatchEggsSigned.hatchEggs(wallet.address);
-        await setLastBakeTime(currentTime);
-
-        console.log('Successfully rebaked:', formattedRewards, 'BNB');
-        console.log('TX Hash:', tx.hash);
-        console.log('TX Fee (Gas):', ethers.utils.formatEther(tx.gasLimit * tx.gasPrice), 'BNB\n')
-
-        await setRebakeCount(Number(currentRebakeCount) + 1);
-
-        // waits here to allow the smart contract to update the miners value
-        console.log('Waiting for beans to update...\n')
-        await new Promise(r => setTimeout(r, 10000));
-
-        const postBakeBeanAmount = await fetchBeansSigned.getMyMiners(wallet.address);
-        console.log('Your Beans (Post bake):', postBakeBeanAmount.toString(), 'BEANS');
-
-        console.log('\nWaiting till next rebake in:', rebakeInterval, 'hour(s)\n')
+        if (result) {
+            console.log('\nWaiting till next rebake in:', rebakeInterval, 'hour(s)\n');
+        } else {
+            console.log('Skipping current rebake..');
+        }
     }
     catch (err) {
         console.error('\nUnable to rebake. Error:', err, '\n');

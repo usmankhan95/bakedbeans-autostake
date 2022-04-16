@@ -46,7 +46,17 @@ You can run the script from your machine with the command:
 
 > `npm start` or `node autoRebake.js`
 
-The script will run fine this way but just note that the machine will need to be on 24/7 as the running counts aren't persisted anywhere. This shouldn't be too much of an issue if running on a VPS.
+The script will run fine this way but just note that the script will need to be running (obviously) in order for you to rebake/eat. There is local file persistence logic which holds the running counters of the script, meaning even if you restart it still has the needed metadata available.
+
+<b>Persisted metadata</b>
+
+|Metadata variables|Description|
+|:-------------|:-----------------------------------------|
+|"REBAKE_COUNT"|Running count of rebakes to know when it's time to EAT|
+|"EAT_DAY_START_TIME"|Waits for 24 hours after this time to eat|
+|"LAST_BAKE_TIME"| Waits for (24 / REBAKES_PER_DAY) hour(s) from this time to rebake again|
+
+> Note: This is the same data persisted by redis when using the Heroku setup
 
 ### <ins>Deploy to Heroku - FREE</ins>
 
