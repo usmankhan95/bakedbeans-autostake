@@ -16,6 +16,7 @@ if (process.env.BSC_PRIVATE_KEY === 'YOUR_PRIVATE_KEY' || !process.env.BSC_PRIVA
 const bbContractAddress = '0xe2d26507981a4daaaa8040bae1846c14e0fb56bf';
 const provider = new ethers.providers.JsonRpcProvider(`https://bsc-dataseed.binance.org/`);
 const wallet = new ethers.Wallet(process.env.BSC_PRIVATE_KEY, provider);
+const bscScan = 'https://www.bscscan.com/tx/';
 
 console.log('\nAdded wallet:', wallet.address, '\n')
 
@@ -79,7 +80,7 @@ if (minRewardAmountToRebake) {
 const bakeDays = process.env.REBAKE_DAYS;
 
 if (bakeDays) {
-    console.log('Running BAKE', bakeDays, ': 1 EAT method')
+    console.log(`Running BAKE ${bakeDays}:1 EAT method`)
 } else {
     console.log('REBAKE ONLY MODE')
 }
@@ -213,6 +214,7 @@ async function eat() {
         const tx = await sellEggsSigned.sellEggs();
 
         console.log('Eat beans successful.. resetting.')
+        console.log(`BscScan: ${bscScan}${tx.hash}`)
         console.log('TX Hash:', tx.hash);
         console.log('TX Fee (Gas):', ethers.utils.formatEther(tx.gasLimit * tx.gasPrice), 'BNB\n')
     }
@@ -240,6 +242,7 @@ async function rebake(rewards) {
     await setLastBakeTime(currentTime);
 
     console.log('Successfully rebaked:', rewards, 'BNB');
+    console.log(`BscScan: ${bscScan}${tx.hash}`)
     console.log('TX Hash:', tx.hash);
     console.log('TX Fee (Gas):', ethers.utils.formatEther(tx.gasLimit * tx.gasPrice), 'BNB\n')
 
