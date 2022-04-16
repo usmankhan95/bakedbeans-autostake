@@ -6,17 +6,16 @@ import { promisify } from 'util';
 
 dotenv.config();
 
-if ((process.env.BSC_ADDRESS === 'YOUR_ADDRESS' || process.env.BSC_PRIVATE_KEY === 'YOUR_PRIVATE_KEY') ||
-    (!process.env.BSC_ADDRESS || !process.env.BSC_PRIVATE_KEY)) {
+if (process.env.BSC_PRIVATE_KEY === 'YOUR_PRIVATE_KEY' || !process.env.BSC_PRIVATE_KEY) {
 
-    throw 'Missing config. Add wallet values into env file!';
+    throw 'Missing config. Add private key into env file!';
 }
 
 const bbContractAddress = '0xe2d26507981a4daaaa8040bae1846c14e0fb56bf';
 const provider = new ethers.providers.JsonRpcProvider(`https://bsc-dataseed.binance.org/`);
 const wallet = new ethers.Wallet(process.env.BSC_PRIVATE_KEY, provider);
 
-console.log('\nAdded wallet:', process.env.BSC_ADDRESS, '\n')
+console.log('\nAdded wallet:', wallet.address, '\n')
 
 // Define ABI's
 const getContractBalAbi = ["function getBalance() public view returns(uint256)"];
@@ -45,9 +44,9 @@ let rebakeCount = 0;
 let eatDayIntervalCount = 0;
 let lastBakeTime = null;
 
-// Initialise redis values
+// Initialise redis client
 if (useRedis) {
-    var rtg = new URL(process.env.REDISTOGO_URL);
+    const rtg = new URL(process.env.REDISTOGO_URL);
     client = createClient(rtg.port, rtg.hostname, {
         no_ready_check: true
     });
@@ -58,10 +57,6 @@ if (useRedis) {
 
     getAsync = promisify(client.get).bind(client);
     setAsync = promisify(client.set).bind(client);
-
-    rebakeCount = await getRebakeCount();
-    eatDayIntervalCount = await getEatDayIntervalCount();
-    lastBakeTime = await getLastBakeTime();
 }
 
 // Minimum reward amount to rebake
@@ -168,7 +163,7 @@ async function eatRewards() {
     }
 }
 
-async function rebake() {
+async function run() {
     try {
         const currentRebakeCount = await getRebakeCount();
         const currentLastBakeTime = await getLastBakeTime();
@@ -177,7 +172,9 @@ async function rebake() {
             console.log('Last bake time:', currentLastBakeTime)
         }
 
-        console.log('Current time:', new Date().toLocaleString(), '\n')
+        const currentTime = new Date().toLocaleString()
+
+        console.log('Current time:', currentTime, '\n')
 
         console.log('Rebake count:', currentRebakeCount)
 
@@ -191,13 +188,13 @@ async function rebake() {
         // fetch beans count
         const fetchBeansSigned = fetchBeansContract.connect(wallet);
 
-        const preBakeBeanAmount = await fetchBeansSigned.getMyMiners(process.env.BSC_ADDRESS);
+        const preBakeBeanAmount = await fetchBeansSigned.getMyMiners(wallet.address);
         console.log('Your Beans (Pre bake):', preBakeBeanAmount.toString(), 'BEANS');
 
         // fetch running rewards
         const fetchRewardsSigned = fetchRewardsContract.connect(wallet);
 
-        const rewards = await fetchRewardsSigned.beanRewards(process.env.BSC_ADDRESS);
+        const rewards = await fetchRewardsSigned.beanRewards(wallet.address);
         const formattedRewards = parseFloat(ethers.utils.formatEther(rewards)).toFixed(3)
         console.log('BB Rewards:', formattedRewards, 'BNB');
 
@@ -216,6 +213,8 @@ async function rebake() {
                 // makes sure we get a full day of rewards before we eat
                 if (rebakesPerDay == currentEatDayIntervalCount) {
                     await eatRewards();
+
+                    // reset counts to 0 
                     await setRebakeCount(0);
                     await setEatDayIntervalCount(0);
 
@@ -235,8 +234,8 @@ async function rebake() {
         console.log('\n--REBAKING--')
         const hatchEggsSigned = hatchEggsContract.connect(wallet);
 
-        const tx = await hatchEggsSigned.hatchEggs(process.env.BSC_ADDRESS);
-        await setLastBakeTime(new Date().toLocaleString());
+        const tx = await hatchEggsSigned.hatchEggs(wallet.address);
+        await setLastBakeTime(currentTime);
 
         console.log('Successfully rebaked:', formattedRewards, 'BNB');
         console.log('TX Hash:', tx.hash);
@@ -248,13 +247,13 @@ async function rebake() {
         console.log('Waiting for beans to update...\n')
         await new Promise(r => setTimeout(r, 10000));
 
-        const postBakeBeanAmount = await fetchBeansSigned.getMyMiners(process.env.BSC_ADDRESS);
+        const postBakeBeanAmount = await fetchBeansSigned.getMyMiners(wallet.address);
         console.log('Your Beans (Post bake):', postBakeBeanAmount.toString(), 'BEANS');
 
-        console.log('\nWaiting till next rebake in:', rebakeInterval, 'hour(s)')
+        console.log('\nWaiting till next rebake in:', rebakeInterval, 'hour(s)\n')
     }
     catch (err) {
-        console.error('\nUnable to rebake. Error:', err);
+        console.error('\nUnable to rebake. Error:', err, '\n');
     }
 }
 
@@ -269,5 +268,5 @@ const setIntervalAsync = (fn, ms) => {
 };
 
 const POLLING_INTERVAL = hoursToMiliseconds(rebakeInterval)
-setIntervalAsync(async () => { await rebake() }, POLLING_INTERVAL)
+setIntervalAsync(async () => { await run() }, POLLING_INTERVAL)
 
