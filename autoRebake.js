@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { URL } from 'url';
 import { createClient } from 'redis';
 import { promisify } from 'util';
+import { abi } from "./abi.js";
 import Conf from 'conf';
 
 dotenv.config();
@@ -20,19 +21,9 @@ const bscScan = 'https://www.bscscan.com/tx/';
 
 console.log('\nAdded wallet:', wallet.address, '\n')
 
-// Define ABI's
-const getContractBalAbi = ["function getBalance() public view returns(uint256)"];
-const getMyMinersAbi = ["function getMyMiners(address adr) public view returns(uint256)"]
-const getBeanRewardsAbi = ["function beanRewards(address adr) public view returns(uint256)"]
-const hatchEggsAbi = ["function hatchEggs(address ref) public"]
-const sellEggsAbi = ["function sellEggs() public"]
-
-// Smart contract objects
-const fetchBalanceContract = new ethers.Contract(bbContractAddress, getContractBalAbi, provider);
-const fetchBeansContract = new ethers.Contract(bbContractAddress, getMyMinersAbi, provider);
-const fetchRewardsContract = new ethers.Contract(bbContractAddress, getBeanRewardsAbi, provider);
-const hatchEggsContract = new ethers.Contract(bbContractAddress, hatchEggsAbi, provider);
-const sellEggsContract = new ethers.Contract(bbContractAddress, sellEggsAbi, provider);
+// Smart contract
+const contract = new ethers.Contract(bbContractAddress, abi, provider);
+const signedContract = contract.connect(wallet);
 
 // Declare undefined objects
 // We do this to mitigate block scoping as the values aren't hoisted in the if block below
@@ -40,6 +31,7 @@ let redisStore = undefined;
 let getAsync = undefined;
 let setAsync = undefined;
 let delAsync = undefined;
+
 const useRedis = process.env.REDISTOGO_URL ? true : false;
 
 // Running counts and metadata
@@ -210,8 +202,7 @@ async function eat() {
     try {
         console.log('\n--EATING BEANS--')
 
-        const sellEggsSigned = sellEggsContract.connect(wallet);
-        const tx = await sellEggsSigned.sellEggs();
+        const tx = await signedContract.sellEggs();
 
         console.log('Eat beans successful.. resetting.')
         console.log(`BscScan: ${bscScan}${tx.hash}`)
@@ -224,7 +215,6 @@ async function eat() {
 }
 
 async function rebake(rewards) {
-
     if (lastBakeTime) {
         const timeDelta = (Math.abs(lastBakeTime - currentTime) / 36e5);
         // Allows (0.1) of cushion
@@ -236,9 +226,8 @@ async function rebake(rewards) {
 
     // Rebake beans (compound rewards)
     console.log('\n--REBAKING--')
-    const hatchEggsSigned = hatchEggsContract.connect(wallet);
 
-    const tx = await hatchEggsSigned.hatchEggs(wallet.address);
+    const tx = await signedContract.hatchEggs(wallet.address);
     await setLastBakeTime(currentTime);
 
     console.log('Successfully rebaked:', rewards, 'BNB');
@@ -252,8 +241,7 @@ async function rebake(rewards) {
     console.log('Waiting for beans to update...\n')
     await new Promise(r => setTimeout(r, 10000));
 
-    const fetchBeansSigned = fetchBeansContract.connect(wallet);
-    const postBakeBeanAmount = await fetchBeansSigned.getMyMiners(wallet.address);
+    const postBakeBeanAmount = await contract.getMyMiners(wallet.address);
 
     console.log('Your Beans (Post bake):', postBakeBeanAmount.toString(), 'BEANS');
 
@@ -279,19 +267,15 @@ async function run() {
             console.log('Rebakes away from eat:', rebakesTillEat - currentRebakeCount)
         }
 
-        const balance = await fetchBalanceContract.getBalance();
+        const balance = await contract.getBalance();
         console.log('BB Contract Balance:', parseFloat(ethers.utils.formatEther(balance)).toFixed(3), 'BNB');
 
         // Fetch beans count
-        const fetchBeansSigned = fetchBeansContract.connect(wallet);
-
-        const preBakeBeanAmount = await fetchBeansSigned.getMyMiners(wallet.address);
+        const preBakeBeanAmount = await contract.getMyMiners(wallet.address);
         console.log('Your Beans (Pre bake):', preBakeBeanAmount.toString(), 'BEANS');
 
         // Fetch running rewards
-        const fetchRewardsSigned = fetchRewardsContract.connect(wallet);
-
-        const rewards = await fetchRewardsSigned.beanRewards(wallet.address);
+        const rewards = await contract.beanRewards(wallet.address);
         const formattedRewards = parseFloat(ethers.utils.formatEther(rewards)).toFixed(3)
         console.log('BB Rewards:', formattedRewards, 'BNB');
 
@@ -335,7 +319,7 @@ async function run() {
             }
         }
 
-        const result = await rebake(formattedRewards, fetchBeansSigned);
+        const result = await rebake(formattedRewards);
 
         if (result) {
             console.log('\nWaiting till next rebake in:', rebakeInterval, 'hour(s)\n');
