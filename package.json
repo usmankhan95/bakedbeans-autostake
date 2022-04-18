@@ -2,11 +2,11 @@
   "name": "baked-beans-miner-auto-rebake-script",
   "version": "1.0.0",
   "description": "Auto rebakes baked beans miner",
-  "main": "autoRebake.js",
+  "main": "src/autoRebake.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node autoRebake.js"
+    "start": "node src/autoRebake.js",
+    "package": "npm install && npx caxa --input \"./\" --output \"autoRebake.exe\" -- \"node\" \"src/autoRebake.js\""
   },
   "keywords": [],
   "author": "Usman Khan",
@@ -16,5 +16,8 @@
     "dotenv": "^12.0.4",
     "ethers": "^5.5.3",
     "redis": "3.1.2"
+  },
+  "devDependencies": {
+    "caxa": "^2.1.0"
   }
 }

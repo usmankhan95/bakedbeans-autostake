@@ -329,6 +329,8 @@ async function run() {
     }
     catch (err) {
         console.error('\nUnable to rebake. Error:', err, '\n');
+        console.log('Skipping current rebake..');
+        console.log('Waiting till next rebake in:', rebakeInterval, 'hour(s)\n');
     }
 }
 
