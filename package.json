@@ -5,8 +5,7 @@
   "main": "src/autoRebake.js",
   "type": "module",
   "scripts": {
-    "start": "node src/autoRebake.js",
-    "package": "npm install && npx caxa --input \"./\" --output \"autoRebake.exe\" -- \"node\" \"src/autoRebake.js\""
+    "start": "node src/autoRebake.js"
   },
   "keywords": [],
   "author": "Usman Khan",
