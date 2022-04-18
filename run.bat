@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 set NODE_VER=null
 set NODE_EXEC=node-v16.14.2-x64.msi
 set SETUP_DIR=%CD%
@@ -22,14 +23,27 @@ IF %NODE_VER% == null (
 	exit
 )
 
+IF EXIST autoRebake.exe (
+	GOTO CheckRefresh
+) ELSE (
+	GOTO PackageAndRun
+)
+
+:CheckRefresh
+echo Existing exe found..
 set /p REFRESH_EXE="Has the .env changed since the last run? (y/n):"
+IF /I "!REFRESH_EXE!"=="y" (
+	ECHO Refreshing exe...
+	del autoRebake.exe
+	GOTO PackageAndRun
+) ELSE (
+	GOTO Run
+)
 
-IF /I "%REFRESH_EXE%"=="y" (
-	IF EXIST autoRebake.exe (
-		ECHO Removing existing exe
-		del autoRebake.exe
-	)
-	call npm install && npx caxa --input "./" --output "autoRebake.exe" -- "node" "src/autoRebake.js"
-) 
+:PackageAndRun
+echo Updating packages and creating exe..
+call npm install && npx caxa --input "./" --output "autoRebake.exe" -- "node" "src/autoRebake.js" && autoRebake.exe
 
+:Run
+echo Running exe...
 call autoRebake.exe

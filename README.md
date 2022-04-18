@@ -36,15 +36,11 @@ Account Options (3 dots) > Account Details > Export Private Key
 
 ### Setup
 
-Prerequisite: 
-- GitHub account
-- Installed [node](https://nodejs.org/en/download/)
+Clone/fork the repo and edit the `.env` file to add the mandatory and any optional configs. You can also just choose the Download ZIP option found under the Code button in GitHub. Extract the ZIP and then double click the `run.bat`
 
-Clone or fork the repo and edit the `.env` file to add the mandatory and any optional configs.
+This batch script will check if the correct required .env configs are there, then it will check if you have [node](https://nodejs.org/en/) installed on your machine. If it's not installed, it will automatically download it by opening your browser. You'll need to complete the installation yourself and then once it's successfully done, double click or run the `run.bat` script again. That's all you need to do. See [below](#local-batch-file-use) for images of the batch file running.
 
-You can run the script from your machine with the command:
-
-> `npm start` or `node autoRebake.js`
+> Note: Batch scripts only work on Windows. For Linux or Mac you'll need to run: `sudo apt update && sudo apt install node` and then run: `npm install && npm start` (after modifying the .env file).
 
 The script will run fine this way but just note that the script will need to be running (obviously) in order for you to rebake/eat. There is local file persistence logic which holds the running counters of the script, meaning even if you restart it still has the needed metadata available.
 
@@ -93,6 +89,21 @@ You can check the logs in Heroku to see if it's running correctly.
 ![Local](images/LocalLogOutput.png)
 ### Heroku
 ![Heroku](images/HerokuLogOutput.png)
+
+## Local batch file use
+
+### On first run it will check if node is installed, if not installed it will download it in the browser
+![WindowsBatNodeInstall](images/WindowsBatSetupNodeInstall.png)
+
+### If node is detected it will automatically install packages, create the exe and run it.
+![WindowsBatSetup2](images/WindowsBatSetup1.png)
+
+### On subsequent runs where the exe exists, it ask if any changes have been made to the .env and if not, will proceed to run the exe.
+![WindowsBatSetup3](images/WindowsBatSetup2.png)
+
+### If changes have been made to the .env it will refresh the exe and create it again.
+![WindowsBatSetup4](images/WindowsBatSetup3.png)
+
 
 ## Considerations
 

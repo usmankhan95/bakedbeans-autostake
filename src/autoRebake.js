@@ -325,6 +325,7 @@ async function run() {
             console.log('\nWaiting till next rebake in:', rebakeInterval, 'hour(s)\n');
         } else {
             console.log('Skipping current rebake..');
+            console.log('\nWaiting till next rebake in:', rebakeInterval, 'hour(s)\n');
         }
     }
     catch (err) {
