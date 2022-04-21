@@ -1,1 +1,1 @@
-worker: node autoRebake.js
+worker: node src/autoRebake.js
