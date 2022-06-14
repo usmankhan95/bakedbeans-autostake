@@ -80,6 +80,8 @@ With the sensitivity of the data required by the script and since we're deployin
 
 #### <b>Redis To Go</b>
 
+UPDATE - Deprecated from Aug-22
+
 The way Heroku works, it recycles dynos every 24 hours, which obviously is not ideal as we need to keep track of how many rebakes we're up to etc. If the script is restarted, it loses the in memory count. To work around this, I've added redis support into the script, this is to persist the running counts outside of the script so that we still have them after restarts. All you need to do is enable the add-on in Heroku for [Redis To Go](https://elements.heroku.com/addons/redistogo) and choose the Nano price plan which is free. Once added it will automatically add a config var named `REDISTOGO_URL`. Now you're all set.
 
 You can check the logs in Heroku to see if it's running correctly.
